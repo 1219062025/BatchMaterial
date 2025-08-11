@@ -1,0 +1,7 @@
+{
+  "ignore": [
+    "fileState.json",
+    "output/**/*",
+    "temp/**/*"
+  ]
+}
