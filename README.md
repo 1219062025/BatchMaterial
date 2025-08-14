@@ -10,6 +10,7 @@
 ```javascript
 	npm install
 ```
+  另外需要下载ffmpeg本体，去https://www.gyan.dev/ffmpeg/builds/网址下的git master builds标题，找到类似ffmpeg-git-full.7z的下载下来，解压缩到public目录下并重命名为ffmpeg。
 
 ### 2.启动运行与打包成exe
 - 启动：BatchMaterialClient目录下运行npm run dev，BatchMaterialServer目录下运行npm run dev即可将前后端都启动；

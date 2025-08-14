@@ -9,7 +9,7 @@ const archiver = require('archiver');
 const { FFMPEG_DIR, TEMP_DIR, OUTPUT_DIR, STATE_FILE, COVER_TYPE } = require('../utils/Const');
 
 const PersistentFileManager = require('../utils/PersistentFileManager');
-const HandleFFMPEG = require('../utils/HandleFFMPEG');
+const FFMPEG = require('../utils/FFMPEG');
 
 [(TEMP_DIR, OUTPUT_DIR)].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -29,39 +29,81 @@ const upload = multer({
   })
 });
 
-router.post('/ffmpeg-video', async (req, res, next) => {
-  // 确保ffmpeg.exe存在
-  if (!fs.existsSync(FFMPEG_DIR)) return res.status(500).json({ message: 'ffmpeg.exe不存在' });
+router.post('/cover', upload.any(), async (req, res, next) => {
+  try {
+    // 1. 解析元数据
+    const meta = JSON.parse(req.body.meta);
 
-  upload.fields([{ name: 'videos' }, { name: 'fillFile' }])(req, res, async function (err) {
-    if (err) {
-      return res.status(400).json({ message: '文件上传失败' });
-    }
+    // 2. 重组队列数据
+    const queueData = [];
+    meta.forEach((item, index) => {
+      const queueItem = {
+        coverType: item.coverType,
+        fileList: [],
+        filler: null,
+        width: item.width,
+        height: item.height
+      };
 
-    if (!req.files['videos'].length) {
-      return res.status(400).json({ message: '未接收到任何文件' });
+      // 提取 fileList 文件
+      for (let i = 0; i < item.fileCount; i++) {
+        const field = `${index}.fileList.${i}`;
+        const file = req.files.find(f => f.fieldname === field);
+        if (file) queueItem.fileList.push(file);
+      }
+
+      // 提取 filler 文件
+      if (item.hasFiller) {
+        const fillerFile = req.files.find(f => f.fieldname === `${index}.filler`);
+        if (fillerFile) queueItem.filler = fillerFile;
+      }
+
+      queueData.push(queueItem);
+    });
+
+    // 3. 处理 queueData（你的业务逻辑）
+    // 示例：queueData[0].fileList[0].buffer 访问文件内容
+    if (queueData.every(data => data.fileList.length === 0)) {
+      return res.status(400).json({ success: false, message: '未检测到需要处理的文件' });
     }
 
     const results = [];
-    const fillFile = (req.files.fillFile && req.files.fillFile[0]) || {};
-    const coverType = req.body.coverType;
 
-    req.files['videos'].forEach(async file => {
-      file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
-      results.push(HandleFFMPEG.convert(file, { coverType: Number(coverType), fillFile, width: req.body.width, height: req.body.height }));
-    });
+    // 循环每个队列
+    for (let i = 0; i < queueData.length; i++) {
+      const queue = queueData[i];
+
+      // 循环队列中每个需要处理的文件（如果有的话）
+      if (queue.fileList.length !== 0) {
+        for (let j = 0; j < queue.fileList.length; j++) {
+          const file = queue.fileList[j];
+          file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+          const handlePromise = FFMPEG.convert(file, {
+            coverType: queue.coverType,
+            filler: queue.filler,
+            width: queue.width,
+            height: queue.height
+          });
+
+          results.push(handlePromise);
+        }
+      }
+    }
 
     await Promise.all(results)
       .then(values => {
         return res.status(200).json(values);
       })
       .catch(reason => {
-        return res.status(500).send(reason);
+        return res.status(500).json({ success: false, message: `FFMPEG处理失败：${reason.message}` });
       })
       .finally(async () => {
         await fs.emptyDir(TEMP_DIR);
       });
-  });
+  } catch (err) {
+    res.status(500).json({ success: false, message: `解析失败：${err}` });
+  }
 });
 
 router.post('/download-video', async (req, res, next) => {

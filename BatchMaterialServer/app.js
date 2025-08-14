@@ -3,13 +3,13 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const app = express();
 const open = require('open');
 const fs = require('fs');
+const indexRouter = require('./routes/index'); // 导入路由
 
 require('dotenv').config({ path: path.join(__dirname + '\\.env') });
 
-const indexRouter = require('./routes/index');
+const app = express();
 
 // 全局挂载中间件
 app.use(cors()); // 处理跨域

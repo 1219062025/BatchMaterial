@@ -7,17 +7,25 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ElAffix: typeof import('element-plus/es')['ElAffix']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElDivider: typeof import('element-plus/es')['ElDivider']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElInputNumber: typeof import('element-plus/es')['ElInputNumber']
+    ElRadio: typeof import('element-plus/es')['ElRadio']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
+    ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    Handle: typeof import('./src/views/handle.vue')['default']
     Home: typeof import('./src/components/home.vue')['default']
+    IEpDelete: typeof import('~icons/ep/delete')['default']
     IEpDeleteFilled: typeof import('~icons/ep/delete-filled')['default']
     IEpUpload: typeof import('~icons/ep/upload')['default']
     IEpZoomIn: typeof import('~icons/ep/zoom-in')['default']
+    MyUpload: typeof import('./src/components/UploadCard.vue')['default']
+    UploadCard: typeof import('./src/components/UploadCard.vue')['default']
   }
 }

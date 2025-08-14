@@ -14,6 +14,18 @@
   .flex-y-center {
     @apply flex items-center;
   }
+
+  .absolute-center {
+    @apply absolute left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%];
+  }
+
+  .absolute-x-center {
+    @apply absolute left-1/2 translate-x-[-50%];
+  }
+
+  .absolute-y-center {
+    @apply absolute top-1/2 translate-y-[-50%];
+  }
 }
 
 :root {
@@ -32,15 +44,3 @@
     outline: none;
   }
 }
-
-#app {
-  ::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-// @media screen and (min-device-width: 1024px) {
-//   #app {
-//     overflow-x: hidden;
-//   }
-// }

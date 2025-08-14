@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import Home from './components/home.vue';
+import Handle from './views/handle.vue';
 </script>
 
 <template>
-  <Home />
+  <Handle />
 </template>
 
 <style scoped></style>

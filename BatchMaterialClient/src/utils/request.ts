@@ -37,7 +37,7 @@ service.interceptors.response.use(
         case 500:
           ElMessage({
             type: 'error',
-            message: `服务器发送错误`
+            message: `${error.response.data.message}`
           });
           break;
         default:
