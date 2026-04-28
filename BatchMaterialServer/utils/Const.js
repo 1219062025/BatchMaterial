@@ -26,8 +26,24 @@ const Const = {
     COVER_1x1: 0,
     COVER_4x5_centercrop: 1,
     COVER_4x5_putcenter: 2,
-    COVER_16x9_picbak: 3,
-    COVER_16x9_videobak: 4
+    COVER_9x16: 3,
+    COVER_16x9_picbak: 4,
+    COVER_16x9_videobak: 5,
+    COVER_ADD_AUDIO: 6
+  },
+  /** 转换类型名 */
+  COVER_TITLE: ['1:1', '4:5（硬切）', '4:5（硬塞）', '9:16', '16:9（填充图片背景）', '16:9（填充视频背景）', '音轨混流'],
+  WS_MESSAGE: {
+    /** 连接成功 */
+    CONNECTION_SUCCESS: 0,
+    /** 更新进度 */
+    UPDATE_PROGRESS: 1
+  },
+  EVENT: {
+    /** 更新任务进度 */
+    UPDATE_PROGRESS: 0,
+    /** 重置进度管理器，以便统计下一次任务 */
+    RESET_PROGRESS: 1
   }
 };
 

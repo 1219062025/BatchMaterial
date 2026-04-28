@@ -4,7 +4,6 @@ import { ElMessage } from 'element-plus';
 // 创建实例
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL, // 在 .env 文件中配置
-  timeout: 60000,
   headers: { 'Content-Type': 'application/json' }
 });
 

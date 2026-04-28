@@ -5,11 +5,18 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const open = require('open');
 const fs = require('fs');
-const indexRouter = require('./routes/index'); // 导入路由
+const http = require('http');
+const WebSocket = require('ws');
 
 require('dotenv').config({ path: path.join(__dirname + '\\.env') });
 
+// 实例express对象
 const app = express();
+// 创建 HTTP 服务器
+const server = http.createServer(app);
+// 启动WebSocket管理器
+const webSocketManager = require('./utils/WebSocketManager');
+webSocketManager.setup(new WebSocket.Server({ noServer: true }), server);
 
 // 全局挂载中间件
 app.use(cors()); // 处理跨域
@@ -21,6 +28,7 @@ const staticPath = path.join(__dirname, 'public', 'dist');
 
 app.use(express.static(staticPath));
 
+const indexRouter = require('./routes/index'); // 导入路由
 app.use('/', indexRouter);
 
 app.get('*', (req, res) => {
@@ -47,7 +55,7 @@ app.use(function (err, req, res, next) {
 });
 
 const port = 3007;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`当前环境为${process.env.IN_PKG === '1' ? 'EXE执行环境' : '开发环境'} ，浏览器地址为：http://127.0.0.1:${port}`);
 
   if (process.env.IN_PKG === '1') {
@@ -56,4 +64,4 @@ app.listen(port, () => {
   }
 });
 
-module.exports = app;
+module.exports = { app, server };

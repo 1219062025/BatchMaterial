@@ -1,21 +1,15 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs-extra');
-const path = require('path');
-const { OUTPUT_DIR, TEMP_DIR } = require('./Const');
+const { OUTPUT_DIR, TEMP_DIR, STATE_FILE } = require('./Const');
 
 // 文件管理器类 - 使用文件系统持久化状态
 class PersistentFileManager {
   constructor(storagePath) {
-    if (!PersistentFileManager.instance) {
-      this.storagePath = storagePath;
-      this.state = { files: {} };
-      // 加载持久化状态
-      this.loadState();
-      this.cleanupCache();
-      PersistentFileManager.instance = this;
-    }
-
-    return PersistentFileManager.instance;
+    this.storagePath = storagePath;
+    this.state = { files: {} };
+    // 加载持久化状态
+    this.loadState();
+    this.cleanupCache();
   }
 
   /** 加载文件记录 */
@@ -98,11 +92,10 @@ class PersistentFileManager {
 
   // 启动时清理所有文件
   async cleanupCache() {
-    console.log('启动清理...');
     await fs.emptyDir(OUTPUT_DIR);
     await fs.emptyDir(TEMP_DIR);
     this.cleanState();
   }
 }
 
-module.exports = PersistentFileManager;
+module.exports = new PersistentFileManager(STATE_FILE);

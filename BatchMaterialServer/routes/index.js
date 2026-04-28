@@ -1,21 +1,19 @@
 const express = require('express');
-const router = express.Router();
-const { spawn } = require('child_process');
 const fs = require('fs-extra');
-const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const multer = require('multer');
 const archiver = require('archiver');
-const { FFMPEG_DIR, TEMP_DIR, OUTPUT_DIR, STATE_FILE, COVER_TYPE } = require('../utils/Const');
-
-const PersistentFileManager = require('../utils/PersistentFileManager');
+const { TEMP_DIR, OUTPUT_DIR, STATE_FILE, COVER_TYPE, EVENT, WS_MESSAGE } = require('../utils/Const');
+const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
+const persistentFileManager = require('../utils/PersistentFileManager');
 const FFMPEG = require('../utils/FFMPEG');
+const webSocketManager = require('../utils/WebSocketManager');
+const event = require('../utils/EventManager');
 
 [(TEMP_DIR, OUTPUT_DIR)].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
-
-const fileManager = new PersistentFileManager(STATE_FILE);
 
 // 创建多文件上传处理器
 const upload = multer({
@@ -31,10 +29,25 @@ const upload = multer({
 
 router.post('/cover', upload.any(), async (req, res, next) => {
   try {
-    // 1. 解析元数据
+    // 实时发送任务处理进度
+    const connectionId = req.body.connectionId;
+    event.on(EVENT.UPDATE_PROGRESS, progressData => {
+      const ws = webSocketManager.activeConnections.get(connectionId);
+      if (ws && ws.readyState === ws.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: WS_MESSAGE.UPDATE_PROGRESS,
+            connectionId,
+            data: progressData
+          })
+        );
+      }
+    });
+
+    // 解析元数据
     const meta = JSON.parse(req.body.meta);
 
-    // 2. 重组队列数据
+    // 重组队列数据
     const queueData = [];
     meta.forEach((item, index) => {
       const queueItem = {
@@ -42,7 +55,12 @@ router.post('/cover', upload.any(), async (req, res, next) => {
         fileList: [],
         filler: null,
         width: item.width,
-        height: item.height
+        height: item.height,
+        startCut: item.startCut,
+        endCut: item.endCut,
+        useFiller: item.useFiller !== undefined ? item.useFiller : true,
+        keepDuration: item.keepDuration || 0,
+        audioTracks: item.audioTracks || []
       };
 
       // 提取 fileList 文件
@@ -58,11 +76,20 @@ router.post('/cover', upload.any(), async (req, res, next) => {
         if (fillerFile) queueItem.filler = fillerFile;
       }
 
+      // 提取 audioTrack 文件
+      if (item.audioTracks && item.audioTracks.length > 0) {
+        item.audioTracks.forEach((track, audioIndex) => {
+          const field = `${index}.audioTrack.${audioIndex}`;
+          const audioFile = req.files.find(f => f.fieldname === field);
+          if (audioFile) queueItem.audioTracks[audioIndex].file = audioFile;
+        });
+      }
+
       queueData.push(queueItem);
     });
 
-    // 3. 处理 queueData（你的业务逻辑）
-    // 示例：queueData[0].fileList[0].buffer 访问文件内容
+    // 处理 queueData
+    // 示例：queueData[0].fileList[0] 访问文件内容
     if (queueData.every(data => data.fileList.length === 0)) {
       return res.status(400).json({ success: false, message: '未检测到需要处理的文件' });
     }
@@ -82,8 +109,13 @@ router.post('/cover', upload.any(), async (req, res, next) => {
           const handlePromise = FFMPEG.convert(file, {
             coverType: queue.coverType,
             filler: queue.filler,
-            width: queue.width,
-            height: queue.height
+            width: Number(queue.width),
+            height: Number(queue.height),
+            startCut: Number(queue.startCut),
+            endCut: Number(queue.endCut),
+            useFiller: queue.useFiller,
+            keepDuration: Number(queue.keepDuration),
+            audioTracks: queue.audioTracks
           });
 
           results.push(handlePromise);
@@ -91,18 +123,20 @@ router.post('/cover', upload.any(), async (req, res, next) => {
       }
     }
 
+    // 处理所有任务
     await Promise.all(results)
       .then(values => {
-        return res.status(200).json(values);
+        res.status(200).json({ success: true, message: values });
       })
       .catch(reason => {
-        return res.status(500).json({ success: false, message: `FFMPEG处理失败：${reason.message}` });
+        res.status(500).json({ success: false, message: `${reason.message}` });
       })
       .finally(async () => {
         await fs.emptyDir(TEMP_DIR);
+        event.emit(EVENT.RESET_PROGRESS);
       });
   } catch (err) {
-    res.status(500).json({ success: false, message: `解析失败：${err}` });
+    res.status(500).json({ success: false, message: `转换视频发生错误：${err.message}` });
   }
 });
 
@@ -120,16 +154,16 @@ router.post('/download-video', async (req, res, next) => {
 
   // 添加每个文件到压缩包
   for (const fileId of fileIds) {
-    const fileInfo = fileManager.state.files[fileId];
+    const fileInfo = persistentFileManager.state.files[fileId];
     archive.append(fs.createReadStream(fileInfo.outputPath), { name: Buffer.from(fileInfo.filename, 'utf8').toString() });
   }
 
   archive.on('error', function (err) {
-    console.log(err);
+    res.status(500).json({ success: false, message: `下载压缩包错误：${err}` });
   });
 
   archive.on('close', function (err) {
-    fileManager.cleanupCache();
+    persistentFileManager.cleanupCache();
   });
 
   archive.finalize();

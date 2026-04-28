@@ -6,9 +6,14 @@
 
     <template v-if="[COVER_TYPE.COVER_16x9_picbak, COVER_TYPE.COVER_16x9_videobak].includes(coverType)">
 
-      <el-upload ref="fillerUpload" v-model:file-list="fillerList" action="#" :drag="true" :multiple="true"
-        :accept="isFillerPicBak ? 'image/*' : '.mp4'" :auto-upload="false" :show-file-list="true"
-        list-type="picture-card" @change="onFillerListChange">
+      <!-- 16:9图片背景队列：是否使用填充背景开关 -->
+      <div v-if="isFillerPicBak" class="mb-4">
+        <el-checkbox v-model="useFiller">使用填充背景</el-checkbox>
+      </div>
+
+      <el-upload v-show="useFiller || !isFillerPicBak" ref="fillerUpload" v-model:file-list="fillerList" action="#"
+        :drag="true" :multiple="true" :accept="isFillerPicBak ? 'image/*' : '.mp4'" :auto-upload="false"
+        :show-file-list="true" list-type="picture-card" @change="onFillerListChange">
 
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="select-none el-upload__text">
@@ -22,7 +27,7 @@
             <div class="absolute z-[999] top-[3px] right-[5px]">
               <el-radio v-if="isFillerPicBak" v-model="fillerPicBakType" :value="index" size="small"
                 @change="onChangeFillerPicBakType">
-                {{ index === 2 ? `自定义` : `默认图片${index + 1}` }}
+                {{ index === 5 ? `自定义` : `默认图片${index + 1}` }}
               </el-radio>
             </div>
             <div class="el-upload-list__item-thumbnail flex-x-center">
@@ -52,7 +57,7 @@
                   <i-ep-ZoomIn />
                 </el-icon>
               </span>
-              <span v-if="!isFillerPicBak || (isFillerPicBak && index === 2)" class="el-upload-list__item-delete"
+              <span v-if="!isFillerPicBak || (isFillerPicBak && index === 5)" class="el-upload-list__item-delete"
                 @click="handleFillerRemove(file)">
                 <el-icon>
                   <i-ep-DeleteFilled />
@@ -62,6 +67,62 @@
           </div>
         </template>
       </el-upload>
+
+      <el-divider />
+    </template>
+
+    <!-- 音轨上传区域（仅音轨混流队列） -->
+    <template v-if="isAddAudio">
+      <el-upload ref="audioUpload" v-model:file-list="audioFileList" action="#" :drag="true" :multiple="true"
+        :accept="'.mp3,.wav,.aac,.flac,.ogg,.m4a'" :auto-upload="false" :show-file-list="true" list-type="picture-card"
+        @change="onAudioTrackListChange">
+
+        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+        <div class="select-none el-upload__text">
+          拖拽 或 <em>选择</em>
+          <br>
+          <text class="font-bold text-blue-500">音轨文件</text>
+        </div>
+
+        <template #file="{ file, index }">
+          <div class="flex w-full">
+            <div class="el-upload-list__item-thumbnail flex-x-center flex-col items-center">
+              <el-icon size="48" color="#409EFF"><i-ep-Headset /></el-icon>
+              <div class="w-[110%] h-[20px] flex-center absolute-x-center bottom-[-25px]">
+                <el-tooltip class="box-item" effect="dark" :content="file.name" placement="bottom">
+                  <div class="cursor-default line-clamp-1">{{ file.name }}</div>
+                </el-tooltip>
+              </div>
+              <div class="w-[110%] h-[20px] flex-center absolute-x-center bottom-[-45px]">
+                <div class="font-bold cursor-default line-clamp-1">{{ formatFileSize(file.size || 0) }}</div>
+              </div>
+            </div>
+            <span class="el-upload-list__item-actions">
+              <span class="el-upload-list__item-delete" @click="handleAudioTrackRemove(file, index)">
+                <el-icon>
+                  <i-ep-DeleteFilled />
+                </el-icon>
+              </span>
+            </span>
+          </div>
+        </template>
+      </el-upload>
+
+      <!-- 音轨列表：每条音轨的起始时间设置 -->
+      <div v-if="audioTracks.length > 0" class="mt-4 mb-4">
+        <div v-for="(track, idx) in audioTracks" :key="idx" class="flex items-center mb-2">
+          <span class="mr-[10px] text-[14px] font-bold text-blue-500">音轨{{ idx + 1 }}：</span>
+          <span class="mr-[10px] text-[13px] line-clamp-1 max-w-[200px]">{{ track.file.name }}</span>
+          <span class="mr-[10px]">
+            起始：
+            <el-input-number v-model="track.startAt" controls-position="right" :min="0" :step="0.5">
+              <template #suffix>
+                <span>秒</span>
+              </template>
+            </el-input-number>
+          </span>
+        </div>
+      </div>
 
       <el-divider />
     </template>
@@ -117,7 +178,7 @@
 
     <template #footer>
       <div class="mb-[10px] flex items-center justify-between">
-        <div class="flex">
+        <div class="flex" v-if="!isAddAudio">
           <span class="mr-[20px]">
             宽：
             <el-input-number v-model="width" @change="handleChangeWidth" controls-position="right">
@@ -126,11 +187,43 @@
               </template>
             </el-input-number>
           </span>
-          <span>
+          <span class="mr-[20px]">
             高：
             <el-input-number v-model="height" @change="handleChangeHeight" controls-position="right">
               <template #suffix>
                 <span>px</span>
+              </template>
+            </el-input-number>
+          </span>
+          <span class="mr-[20px]">
+            裁剪：
+            <el-input-number v-model="startCut" controls-position="right" :min="0" :disabled="keepDuration > 0">
+              <template #prefix>
+                <span>前</span>
+              </template>
+              <template #suffix>
+                <span>秒</span>
+              </template>
+            </el-input-number>
+            <el-input-number v-model="endCut" controls-position="right" :min="0" class="ml-[10px]"
+              :disabled="keepDuration > 0">
+              <template #prefix>
+                <span>后</span>
+              </template>
+              <template #suffix>
+                <span>秒</span>
+              </template>
+            </el-input-number>
+          </span>
+          <span class="mr-[20px]">
+            保留：
+            <el-input-number v-model="keepDuration" controls-position="right" :min="0"
+              :disabled="startCut > 0 || endCut > 0">
+              <template #prefix>
+                <span>前</span>
+              </template>
+              <template #suffix>
+                <span>秒</span>
               </template>
             </el-input-number>
           </span>
@@ -153,7 +246,8 @@
       </div>
 
       <div class="ml-[5px] flex items-center justify-between w-full">
-        <div class="text-red-600 text-[12px]">素材仅支持MP4视频</div>
+        <div v-if="isAddAudio" class="text-red-600 text-[12px]">素材仅支持MP4视频，音轨支持 MP3/WAV/AAC/FLAC/OGG/M4A</div>
+        <div v-else class="text-red-600 text-[12px]">素材仅支持MP4视频</div>
       </div>
     </template>
 
@@ -177,7 +271,7 @@
 <script setup lang='ts'>
 import { UploadFile, UploadFiles, UploadInstance, UploadProps, UploadRawFile, UploadUserFile } from 'element-plus';
 import { UploadFilled, Delete } from '@element-plus/icons-vue'
-import { COVER_TYPE, CARD_TITLE, PIC_BAK_TYPE, QueueInfo } from '@/utils/constans';
+import { COVER_TYPE, CARD_TITLE, PIC_BAK_TYPE, QueueInfo, AudioTrack } from '@/utils/constans';
 import { getAssetURL, imageToFile, formatFileSize } from '@/utils';
 import { useUploadStore } from '@/store/upload';
 
@@ -197,22 +291,41 @@ const isFillerPicBak = computed(() => {
   return props.coverType === COVER_TYPE.COVER_16x9_picbak
 })
 
+/** 是否是音轨混流队列 */
+const isAddAudio = computed(() => {
+  return props.coverType === COVER_TYPE.COVER_ADD_AUDIO
+})
+
 /** 上传的文件列表 */
 const fileList = defineModel<UploadUserFile[]>('fileList', { required: true, default: [] })
 /** 填充的背景列表 */
 const fillerList = defineModel<UploadUserFile[]>('fillerList', { required: false, default: [] })
+/** 音轨列表（仅音轨混流队列） */
+const audioTracks = defineModel<AudioTrack[]>('audioTracks', { required: false, default: [] })
 
 
 /** 默认宽度 */
 const width = ref(1080)
 /** 默认高度 */
 const height = ref(1080)
+/** 裁剪前startCut秒 */
+const startCut = ref(0)
+/** 裁剪后endCut秒 */
+const endCut = ref(0)
+/** 是否使用填充背景（仅16:9图片背景队列有效） */
+const useFiller = ref(true)
+/** 保留前keepDuration秒（与裁剪功能互斥） */
+const keepDuration = ref(0)
 /** 文件上传组件实例 */
 const fileUpload = ref<UploadInstance>()
 /** 填充背景上传组件实例 */
 const fillerUpload = ref<UploadInstance>()
+/** 音轨上传组件实例 */
+const audioUpload = ref<UploadInstance>()
 /** 填充的背景 */
 const filler = ref<UploadUserFile>()
+/** 音轨文件列表（el-upload 绑定用） */
+const audioFileList = ref<UploadUserFile[]>([])
 
 /** 填充图片背景时使用默认图片还是自定义 0 = 默认图片1  1 = 默认图片2  2 = 自定义图片 */
 const fillerPicBakType = ref<PIC_BAK_TYPE>(PIC_BAK_TYPE.DEFAULT_IMG1)
@@ -235,6 +348,11 @@ watchEffect(() => {
     filler: filler.value ? { ...filler.value } : undefined,
     width: width.value,
     height: height.value,
+    startCut: startCut.value,
+    endCut: endCut.value,
+    useFiller: isFillerPicBak.value ? useFiller.value : undefined,
+    keepDuration: keepDuration.value,
+    audioTracks: isAddAudio.value ? [...audioTracks.value] : undefined
   }
 
   store.queueInfos[coverType.value] = newInfo
@@ -268,6 +386,10 @@ const handleClearQueue = async () => {
     }
   ).then(async () => {
     await fileUpload.value?.clearFiles();
+    if (isAddAudio.value) {
+      audioTracks.value = [];
+      audioFileList.value = [];
+    }
     ElMessage({
       type: 'success',
       message: `已清空队列【${CARD_TITLE[props.coverType]}】`,
@@ -321,8 +443,8 @@ const onFillerListChange: UploadProps['onChange'] = async (file: UploadFile, upl
   }
 
   // 超过限制数量
-  const limit = isFillerPicBak.value ? 3 : 1;
-  const index = isFillerPicBak.value ? 2 : 0;
+  const limit = isFillerPicBak.value ? 6 : 1;
+  const index = isFillerPicBak.value ? 5 : 0;
   if (uploadFiles.length > limit) {
     uploadFiles.splice(index, 1);
   }
@@ -342,6 +464,31 @@ const onClosePreview = () => {
   }
 }
 
+/** 音轨文件列表改变 */
+const onAudioTrackListChange: UploadProps['onChange'] = async (file: UploadFile, uploadFiles: UploadFiles) => {
+  const acceptTypes = ['audio/mpeg', 'audio/wav', 'audio/aac', 'audio/flac', 'audio/ogg', 'audio/x-m4a', 'audio/mp4', 'audio/x-wav']
+  // 通过扩展名兜底校验（部分浏览器 MIME 可能不一致）
+  const ext = file.name?.split('.').pop()?.toLowerCase()
+  const validExt = ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a']
+  if (!acceptTypes.includes(file.raw?.type || '') && !validExt.includes(ext || '')) {
+    ElMessage.error('音轨仅支持 MP3/WAV/AAC/FLAC/OGG/M4A 格式');
+    await audioUpload.value?.handleRemove(file)
+    return
+  }
+
+  // 同步到 audioTracks
+  audioTracks.value = uploadFiles.map(f => {
+    const existing = audioTracks.value.find(t => t.file.uid === f.uid)
+    return existing || { file: f, startAt: 0 }
+  })
+}
+
+/** 移除音轨 */
+const handleAudioTrackRemove = async (file: UploadFile, index: number) => {
+  await audioUpload.value?.handleRemove(file)
+  audioTracks.value.splice(index, 1)
+}
+
 const onChangeFillerPicBakType = (value: string | number | boolean | undefined) => {
   filler.value = fillerList.value[value as number]
 }
@@ -352,7 +499,10 @@ const handleChangeWidth = () => {
     height.value = width.value
   } else if (props.coverType === COVER_TYPE.COVER_4x5_centercrop || props.coverType === COVER_TYPE.COVER_4x5_putcenter) {
     height.value = (5 / 4) * width.value
-  } else if (props.coverType === COVER_TYPE.COVER_16x9_picbak || props.coverType === COVER_TYPE.COVER_16x9_videobak) {
+  } else if (props.coverType === COVER_TYPE.COVER_9x16) {
+    height.value = (16 / 9) * width.value
+  }
+  else if (props.coverType === COVER_TYPE.COVER_16x9_picbak || props.coverType === COVER_TYPE.COVER_16x9_videobak) {
     height.value = (9 / 16) * width.value
   }
 }
@@ -363,7 +513,10 @@ const handleChangeHeight = () => {
     width.value = height.value
   } else if (props.coverType === COVER_TYPE.COVER_4x5_centercrop || props.coverType === COVER_TYPE.COVER_4x5_putcenter) {
     width.value = (4 / 5) * height.value
-  } else if (props.coverType === COVER_TYPE.COVER_16x9_picbak || props.coverType === COVER_TYPE.COVER_16x9_videobak) {
+  } else if (props.coverType === COVER_TYPE.COVER_9x16) {
+    width.value = (9 / 16) * height.value
+  }
+  else if (props.coverType === COVER_TYPE.COVER_16x9_picbak || props.coverType === COVER_TYPE.COVER_16x9_videobak) {
     width.value = (16 / 9) * height.value
   }
 }
@@ -373,16 +526,22 @@ const init = async () => {
   // 组件加载后默认执行一次
   handleChangeWidth()
 
-  // 加载16x9（填充图片背景）的两张默认图片
+  store.queueCount++;
+
+  // 加载16x9（填充图片背景）的默认图片
   if (props.coverType === COVER_TYPE.COVER_16x9_picbak) {
     if (fillerList.value.length === 0) {
-      const loadDefaultImg1Promise = imageToFile(getAssetURL('default_img1.png'), 'default_img1.png')
+      const loadQueue: Promise<File>[] = []
+      for (let i = 0; i < 5; i++) {
+        const loadDefaultImgPromise = imageToFile(getAssetURL(`default_img${i}.png`), `'default_img${i}.png'`)
+        loadQueue.push(loadDefaultImgPromise)
+      }
 
-      const loadDefaultImg2Promise = imageToFile(getAssetURL('default_img2.png'), 'default_img2.png')
-
-      Promise.all([loadDefaultImg1Promise, loadDefaultImg2Promise]).then(async ([result1, result2]) => {
-        await fillerUpload.value?.handleStart(result1 as UploadRawFile)
-        await fillerUpload.value?.handleStart(result2 as UploadRawFile)
+      Promise.all(loadQueue).then(async (results) => {
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          await fillerUpload.value?.handleStart(result as UploadRawFile)
+        }
 
         filler.value = fillerList.value[0]
       })
